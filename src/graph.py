@@ -138,6 +138,9 @@ def _parse_waypoints_from_text(text: str) -> List[Dict[str, Any]]:
         return int(n) if n else 0
 
     wps.sort(key=wp_key)
+    # Deduplicate by waypoint ID (PDF chunks may repeat the table)
+    seen: set = set()
+    wps = [w for w in wps if not (w["id"] in seen or seen.add(w["id"]))]
     return wps
 
 
@@ -254,6 +257,20 @@ def route_after_audit(state: AppState) -> str:
     return "planner_revision"
 
 
+def _strip_code_fences(text: str) -> str:
+    """Remove markdown ```html ... ``` or ``` ... ``` wrappers the LLM may add."""
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        # Drop first line (```html or ```) and last line (```)
+        if lines[-1].strip() == "```":
+            lines = lines[1:-1]
+        else:
+            lines = lines[1:]
+        text = "\n".join(lines).strip()
+    return text
+
+
 def node_report(state: AppState) -> AppState:
     html = run_report_agent(
         business_context=state.get("business_context", ""),
@@ -262,7 +279,7 @@ def node_report(state: AppState) -> AppState:
         weather_risk=state.get("weather_risk", {}),
         dispatch_plan=state.get("dispatch_plan", ""),
     )
-    return {"report_html": html}
+    return {"report_html": _strip_code_fences(html)}
 
 
 def node_email(state: AppState) -> AppState:
