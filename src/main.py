@@ -7,12 +7,20 @@ from graph import build_graph
 
 
 if __name__ == "__main__":
- 
+
     app = build_graph()
 
     state = {
         "pdf_path": "data/SeeWeeS Specialty Dispatch Playbook.pdf",
         "csv_path": "data/Incoming_shipment_03_06.csv",
+
+        # Enhancement 2: What-if Scenario Simulation
+        # Uncomment and edit to activate scenario analysis:
+        # "scenario": {
+        #     "type": "demand_spike",
+        #     "magnitude": 0.20,
+        #     "description": "20% increase in Remdesivir demand from Boston-MGH due to outbreak.",
+        # },
     }
 
     final = app.invoke(state)

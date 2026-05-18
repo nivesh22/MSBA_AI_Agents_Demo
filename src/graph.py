@@ -11,26 +11,48 @@ from tools.pdf_tools import PdfRag
 from tools.csv_tools import analyze_csv
 from tools.weather_tools import get_weather_forecast, derive_dispatch_weather_risk
 from tools.email_tools import send_email_smtp
-from agents import run_context_agent, run_ops_agent, run_planner_agent, run_report_agent
+from agents import (
+    run_context_agent,
+    run_ops_agent,
+    run_planner_agent,
+    run_planner_revision_agent,
+    run_scenario_agent,
+    run_audit_agent,
+    run_report_agent,
+)
 
 load_dotenv()
 
 
 class AppState(TypedDict, total=False):
+    # Inputs
     pdf_path: str
     csv_path: str
+    scenario: Dict[str, Any]           # Enhancement 2: optional {"type", "magnitude", "description"}
 
+    # PDF context
     business_context: str
+    pdf_retriever: Any                 # Enhancement 3: in-process retriever, reused by csv_analysis
 
+    # CSV analysis
     csv_summary: Dict[str, Any]
     csv_kpis: Dict[str, Any]
     anomalies_md: str
+    cross_ref_findings: List[Dict[str, Any]]   # Enhancement 3: missing-ID cross-refs
     ops_insights: str
 
-    # In corridor mode we store a route-level dict in weather_risk; in fallback mode it's single-location risk dict.
+    # Scenario simulation
+    scenario_analysis: str             # Enhancement 2: ScenarioAgent output
+
+    # Weather
     weather_risk: Dict[str, Any]
 
+    # Planning + audit loop
     dispatch_plan: str
+    audit_result: Dict[str, Any]       # Enhancement 1: last AuditAgent JSON
+    audit_iteration: int               # Enhancement 1: loop counter (max 3)
+
+    # Report
     report_html: str
 
 
@@ -44,24 +66,44 @@ def node_pdf_context(state: AppState) -> AppState:
     snippets = "\n\n---\n\n".join(d.page_content for d in docs)
 
     business_context = run_context_agent(snippets)
-    return {"business_context": business_context}
+    return {"business_context": business_context, "pdf_retriever": retriever}
 
 
 def node_csv_analysis(state: AppState) -> AppState:
-    res = analyze_csv(state["csv_path"])
+    retriever = state.get("pdf_retriever")
+    res = analyze_csv(state["csv_path"], retriever=retriever)
 
     anomalies_md = "(none detected or insufficient numeric data)"
     if not res.anomalies.empty:
         anomalies_md = res.anomalies.head(12).to_markdown(index=False)
 
-    ops_insights = run_ops_agent(summary=res.summary, kpis=res.kpis, anomalies_md=anomalies_md)
+    ops_insights = run_ops_agent(
+        summary=res.summary,
+        kpis=res.kpis,
+        anomalies_md=anomalies_md,
+        cross_ref_findings=res.cross_ref_findings,
+    )
 
     return {
         "csv_summary": res.summary,
         "csv_kpis": res.kpis,
         "anomalies_md": anomalies_md,
+        "cross_ref_findings": res.cross_ref_findings,
         "ops_insights": ops_insights,
     }
+
+
+def node_scenario(state: AppState) -> AppState:
+    """No-op if no scenario specified; else runs ScenarioAgent."""
+    scenario = state.get("scenario")
+    if not scenario:
+        return {"scenario_analysis": ""}
+
+    result = run_scenario_agent(
+        kpis=state.get("csv_kpis", {}),
+        scenario=scenario,
+    )
+    return {"scenario_analysis": result}
 
 
 # --- Waypoint parsing helpers (extract W1..W5 rows from PDF-retrieved text) ---
@@ -102,14 +144,13 @@ def _parse_waypoints_from_text(text: str) -> List[Dict[str, Any]]:
 def node_weather(state: AppState) -> AppState:
     tz = os.getenv("WEATHER_TZ", "America/New_York")
 
-    # Retrieve waypoint table from the PDF using PdfRag
     rag = PdfRag(persist_dir="chroma_db")
     vectordb = rag.build(state["pdf_path"])
     retriever = rag.retriever(vectordb, k=20)
 
     wp_query = (
-    "Find the section titled 'Route Definition' or 'Waypoints' or 'I-95 Corridor Waypoints'. "
-    "Return the waypoint list including W1, W2, W3, W4, W5 and their latitude and longitude."
+        "Find the section titled 'Route Definition' or 'Waypoints' or 'I-95 Corridor Waypoints'. "
+        "Return the waypoint list including W1, W2, W3, W4, W5 and their latitude and longitude."
     )
     docs = retriever.invoke(wp_query)
     wp_text = "\n".join(d.page_content for d in docs)
@@ -118,7 +159,6 @@ def node_weather(state: AppState) -> AppState:
     print("===================================\n")
     waypoints = _parse_waypoints_from_text(wp_text)
 
-    # Fallback if parsing is weak or incomplete
     if len(waypoints) < 5:
         print(f"Waypoint extraction failed (found {len(waypoints)}). Falling back to WEATHER_LAT/LON.")
         lat = os.getenv("WEATHER_LAT", "40.7282")
@@ -131,7 +171,6 @@ def node_weather(state: AppState) -> AppState:
         print("=========================================\n")
         return {"weather_risk": risk}
 
-    # Compute per-waypoint risk and roll up to route-level risk (max score)
     per_waypoint: List[Dict[str, Any]] = []
     worst: Dict[str, Any] | None = None
     max_score = -1
@@ -152,7 +191,6 @@ def node_weather(state: AppState) -> AppState:
         "per_waypoint": per_waypoint,
     }
 
-    # Backwards compatibility (expose worst waypoint metrics using the original schema)
     if worst:
         route_risk.update(
             {
@@ -174,8 +212,46 @@ def node_planner(state: AppState) -> AppState:
         business_context=state.get("business_context", ""),
         ops_insights=state.get("ops_insights", ""),
         weather_risk=state.get("weather_risk", {}),
+        scenario_analysis=state.get("scenario_analysis", ""),
     )
     return {"dispatch_plan": plan}
+
+
+def node_audit(state: AppState) -> AppState:
+    result = run_audit_agent(
+        business_context=state.get("business_context", ""),
+        dispatch_plan=state.get("dispatch_plan", ""),
+    )
+    iteration = state.get("audit_iteration", 0) + 1
+    print(f"\n===== AUDIT (iteration {iteration}) =====")
+    print(f"compliant={result.get('compliant')}  violations={result.get('violations')}")
+    print("==========================================\n")
+    return {"audit_result": result, "audit_iteration": iteration}
+
+
+def node_planner_revision(state: AppState) -> AppState:
+    audit = state.get("audit_result", {})
+    revised = run_planner_revision_agent(
+        business_context=state.get("business_context", ""),
+        ops_insights=state.get("ops_insights", ""),
+        weather_risk=state.get("weather_risk", {}),
+        scenario_analysis=state.get("scenario_analysis", ""),
+        prior_plan=state.get("dispatch_plan", ""),
+        audit_feedback=audit.get("feedback", ""),
+        violations=audit.get("violations", []),
+    )
+    return {"dispatch_plan": revised}
+
+
+def route_after_audit(state: AppState) -> str:
+    """Conditional routing: loop back to planner_revision or proceed to report."""
+    MAX_ITERATIONS = 3
+    audit = state.get("audit_result", {})
+    iteration = state.get("audit_iteration", 0)
+
+    if audit.get("compliant", False) or iteration >= MAX_ITERATIONS:
+        return "report"
+    return "planner_revision"
 
 
 def node_report(state: AppState) -> AppState:
@@ -205,16 +281,31 @@ def build_graph():
 
     g.add_node("pdf_context", node_pdf_context)
     g.add_node("csv_analysis", node_csv_analysis)
+    g.add_node("scenario", node_scenario)
     g.add_node("weather", node_weather)
     g.add_node("planner", node_planner)
+    g.add_node("audit", node_audit)
+    g.add_node("planner_revision", node_planner_revision)
     g.add_node("report", node_report)
     g.add_node("email", node_email)
 
     g.set_entry_point("pdf_context")
     g.add_edge("pdf_context", "csv_analysis")
-    g.add_edge("csv_analysis", "weather")
+    g.add_edge("csv_analysis", "scenario")
+    g.add_edge("scenario", "weather")
     g.add_edge("weather", "planner")
-    g.add_edge("planner", "report")
+    g.add_edge("planner", "audit")
+    g.add_edge("planner_revision", "audit")
+
+    g.add_conditional_edges(
+        "audit",
+        route_after_audit,
+        {
+            "report": "report",
+            "planner_revision": "planner_revision",
+        },
+    )
+
     g.add_edge("report", "email")
     g.add_edge("email", END)
 
