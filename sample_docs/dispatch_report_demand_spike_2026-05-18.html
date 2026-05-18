@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Dispatch Planning & Weather Risk Report</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  h1, h2, h3 { color: #2a4d69; }
+  table { border-collapse: collapse; width: 100%; max-width: 600px; margin-bottom: 20px; }
+  th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+  th { background-color: #f0f4f8; }
+  .highlight { background-color: #ffeb3b; font-weight: bold; }
+  ul { margin-top: 0; }
+</style>
+</head>
+<body>
+
+<h1>Dispatch Planning & Weather Risk Report</h1>
+
+<h2>1. Shipment Volume & Trucking</h2>
+<ul>
+  <li><strong>Total shipments planned:</strong> 89 (including 2 additional Remdesivir units for Boston-MGH demand increase)</li>
+  <li><strong>Unique item types:</strong> 9</li>
+  <li><strong>Missing unique_item_id rate:</strong> 6.25% (6 shipments excluded from dispatch planning)</li>
+  <li><strong>Total volume calculation:</strong> 89 volume units × 1.10 packing inefficiency buffer = 97.9 volume units</li>
+  <li><strong>Truck capacity:</strong> 10 volume units per truck → <strong>Required trucks:</strong> 10</li>
+  <li><strong>Cold-chain compliance:</strong> Remdesivir and Insulin Lispro require temperature-controlled trucks; trucks assigned accordingly</li>
+</ul>
+
+<h2>2. Weather Risk Summary</h2>
+<p><strong>Corridor Maximum Weather Risk Score:</strong> 1 (Moderate risk)</p>
+<p><strong>Risk Flags:</strong> High wind risk at Newark (W1) waypoint; no heavy rain or freezing risk detected</p>
+<p><strong>Travel Time Buffer Applied:</strong> 10% increase to accommodate weather-related delays</p>
+
+<table>
+  <caption><strong>Weather Risk Scores by Waypoint</strong></caption>
+  <thead>
+    <tr>
+      <th>Waypoint</th>
+      <th>City</th>
+      <th>State</th>
+      <th>Risk Score (0-3)</th>
+      <th>Max Wind Gust (km/h)</th>
+      <th>Min Temp (°C)</th>
+      <th>Risk Flags</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="highlight">
+      <td>W1</td>
+      <td>Newark</td>
+      <td>NJ</td>
+      <td>1</td>
+      <td>54.7</td>
+      <td>20.0</td>
+      <td>High Wind Risk</td>
+    </tr>
+    <tr>
+      <td>W2</td>
+      <td>Bronx</td>
+      <td>NY</td>
+      <td>0</td>
+      <td>41.0</td>
+      <td>19.2</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>W3</td>
+      <td>New Haven</td>
+      <td>CT</td>
+      <td>1</td>
+      <td>45.7</td>
+      <td>15.2</td>
+      <td>High Wind Risk</td>
+    </tr>
+    <tr>
+      <td>W4</td>
+      <td>Providence</td>
+      <td>RI</td>
+      <td>1</td>
+      <td>50.0</td>
+      <td>16.9</td>
+      <td>High Wind Risk</td>
+    </tr>
+    <tr>
+      <td>W5</td>
+      <td>Boston</td>
+      <td>MA</td>
+      <td>1</td>
+      <td>56.9</td>
+      <td>15.2</td>
+      <td>High Wind Risk</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>3. SLA Compliance & Dispatch Prioritization</h2>
+<ul>
+  <li><strong>Tier 1 (Life-critical medicine):</strong> Max 6 hours transit time</li>
+  <li><strong>Tier 2 (Standard specialty medicine):</strong> Max 12 hours transit time</li>
+  <li>10% travel time buffer applied due to weather risk</li>
+  <li>Dispatch plans flagged if transit times exceed SLA after buffer</li>
+  <li>Priority given to Tier 1 shipments to ensure SLA compliance</li>
+</ul>
+
+<h2>4. Data Quality & Handling</h2>
+<ul>
+  <li><strong>Missing unique_item_id (DQ-01):</strong> 6 shipments excluded from dispatch volume and flagged for investigation</li>
+  <li><strong>Other flags:</strong> Item_id not in master table (DQ-02), item_name mismatch (DQ-03), duplicate unique_item_id (DQ-04) flagged for investigation</li>
+  <li>All invalid rows logged with reason codes</li>
+  <li>Immediate data validation checks recommended to reduce missing IDs</li>
+</ul>
+
+<h2>5. Scenario Contingency & Monitoring</h2>
+<ul>
+  <li><strong>Remdesivir demand increase at Boston-MGH:</strong> +20% → 2 additional units planned, 3 units inventory buffer recommended (total 16 units)</li>
+  <li><strong>Contingency triggers:</strong>
+    <ul>
+      <li>Remdesivir shipments to Boston-MGH >15 units in 24h → emergency restock</li>
+      <li>Missing unique_item_id rate >7% → data quality review</li>
+      <li>Dispatch delays >2 hours for Boston-MGH Remdesivir → escalate logistics management</li>
+      <li>Weather risk escalation if route risk_score reaches 3 → 40% travel buffer and dispatch escalation</li>
+    </ul>
+  </li>
+  <li><strong>Monitoring plan:</strong>
+    <ul>
+      <li>Hourly tracking of Remdesivir shipments to Boston-MGH</li>
+      <li>Daily monitoring of missing unique_item_id rate; alert if >6.5%</li>
+      <li>Dispatch lead times for Boston-MGH Remdesivir every 4 hours</li>
+      <li>Inventory levels at Boston-MGH warehouses twice daily</li>
+      <li>Weather monitoring at corridor waypoints, focus on Newark (W1)</li>
+      <li>Communication with hospital pharmacies every 12 hours</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>6. KPI Summary</h2>
+<ul>
+  <li>Total shipments increased from 87 to 89</li>
+  <li>Missing unique_item_id count increased from 5 to 6 (6.25% rate)</li>
+  <li>Weather-driven travel buffer applied at 10% due to moderate high wind risk</li>
+  <li>SLA risk flags expected to remain low with buffers and prioritization</li>
+  <li>Data quality issues persist but actively managed</li>
+  <li>Truck utilization increased to 10 trucks with cold-chain compliance ensured</li>
+  <li>Inventory buffer reduces risk of stockouts for critical Remdesivir demand spike</li>
+</ul>
+
+</body>
+</html>
