@@ -3,129 +3,146 @@ from langchain_core.prompts import ChatPromptTemplate
 
 PDF_CONTEXT_PROMPT = ChatPromptTemplate.from_messages([
     ("system",
-     "You are ContextAgent. Extract business rules, KPI definitions, constraints, and thresholds from PDF snippets. "
-     "Be precise. Output structured bullets."),
+     "You are ContextAgent. Extract business rules, KPI definitions, constraints, and thresholds from the playbook. "
+     "Be precise. Output structured bullets. Cover: corridors, SLA tiers, weather triggers, buffer policy, "
+     "truck capacity model, DQ rules (DQ-01..DQ-04), resource constraints, penalty model."),
     ("user",
-     "PDF snippets:\n{snippets}\n\nReturn:\n"
-     "1) KPI definitions\n2) Constraints/SLA\n3) Dispatch heuristics\n4) Thresholds/guardrails\n")
+     "Playbook content:\n{snippets}\n\nReturn:\n"
+     "1) Corridor definitions and SLA tiers\n"
+     "2) Weather risk thresholds and buffer policy\n"
+     "3) Truck capacity model and packing rules\n"
+     "4) Data quality rules (DQ-01..DQ-04)\n"
+     "5) Resource constraint policy and penalty model\n"
+     "6) Reporting requirements\n")
 ])
 
 OPS_ANALYSIS_PROMPT = ChatPromptTemplate.from_messages([
     ("system",
-     "You are OpsDataAgent. Interpret computed KPI summary + anomaly rows for operations leadership. "
-     "Call out data quality issues and likely root causes."),
+     "You are OpsDataAgent. Interpret multi-corridor shipment KPIs for operations leadership. "
+     "Focus on the 48-hour planning window, corridor-level differences, data quality, and resource constraints."),
     ("user",
-     "CSV summary:\n{summary}\n\nKPIs:\n{kpis}\n\nAnomalies:\n{anomalies_md}\n\n"
-     "Cross-reference findings (items with missing unique_item_id vs PDF Item Master):\n{cross_ref_findings}\n\n"
+     "Overall CSV summary:\n{summary}\n\n"
+     "Global KPIs:\n{kpis}\n\n"
+     "Multi-corridor KPIs (per corridor, per day, resource allocation):\n{multi_corridor_kpis}\n\n"
+     "Resource constraints (available trucks/drivers per day):\n{resource_constraints}\n\n"
+     "Anomaly highlights:\n{anomalies_md}\n\n"
+     "Data quality / reconciliation findings:\n{cross_ref_findings}\n\n"
      "Return:\n"
-     "- Key dispatch findings (shipment volumes, hospital breakdown, top items)\n"
-     "- Data quality issues (missing IDs, experimental items flagged)\n"
-     "- PDF cross-reference notes (what the Item Master says about unidentified items)\n"
-     "- Possible root causes\n"
-     "- Immediate actions\n")
+     "- Corridor comparison: volume, Tier mix, excluded rate per corridor for Day0 and Day1\n"
+     "- Historical trend: avg daily units per corridor vs planning-window demand\n"
+     "- Data quality summary: DQ-01 (missing UID), DQ-02 (invalid ID), DQ-03 (name mismatch), DQ-04 (duplicates); "
+     "  legacy/alias resolutions applied\n"
+     "- Resource gap: trucks and drivers needed vs available per corridor per day; any shortfall\n"
+     "- Estimated penalty exposure if shortfalls occur (Tier 1: 100pts, Tier 2: 40pts, cold-chain: +80pts)\n"
+     "- Immediate actions and monitoring priorities\n")
 ])
 
+_PLANNER_SYSTEM = (
+    "You are PlannerAgent. Produce a corridor-aware, resource-constrained dispatch plan for the 48-hour planning window.\n\n"
+    "WEATHER CONTRACT:\n"
+    "- Use only fields present in weather_risk and weather_risk_by_corridor.\n"
+    "- Do NOT reference snowfall, visibility, or hourly thresholds.\n"
+    "- Per-corridor: use corridor_48h_risk_score_0_3 (max of Day0/Day1 waypoint scores).\n\n"
+    "BUFFER POLICY (apply per corridor based on its risk score):\n"
+    "  0 → no buffer | 1 → +10% | 2 → +25% | 3 → +40% + escalation\n\n"
+    "RESOURCE CONSTRAINT:\n"
+    "- Available pool is shared across both corridors per day.\n"
+    "- Allocate to minimize total penalty: Tier 1 SLA violation = 100 pts/unit, "
+    "Tier 2 = 40 pts/unit, cold-chain violation = +80 pts/unit additional.\n"
+    "- Prioritize Tier 1 (C1_I95_NJ_BOS) cold-chain units first when resources are scarce.\n\n"
+    "TRUCK MODEL: each unit = 1 vol unit; truck = 10 vol; +10% packing buffer; "
+    "cold-chain items require temp-controlled trucks.\n"
+)
+
 PLANNER_PROMPT = ChatPromptTemplate.from_messages([
-    ("system",
-     "You are PlannerAgent. Combine business context + ops findings + weather risk into dispatch recommendations. "
-     "Prioritize SLA, safety, and cost.\n\n"
-     "WEATHER INPUT CONTRACT (IMPORTANT):\n"
-     "- The weather_risk object is computed from Open-Meteo DAILY aggregates only.\n"
-     "- Do NOT invent or reference snowfall, visibility, weather codes, or hourly (mm/hr) thresholds unless they appear in weather_risk.\n"
-     "- Use ONLY these fields if present: max_precip_mm_day, max_wind_gust_kmh, min_temp_c, risk_flags, risk_score_0_3.\n"
-     "- If corridor fields exist (route_risk_score_0_3, worst_waypoint, per_waypoint), interpret route_risk_score_0_3 as the corridor max "
-     "and worst_waypoint as the driver.\n\n"
-     "BUFFER POLICY (use this mapping):\n"
-     "- risk_score 0 → 0% buffer\n"
-     "- risk_score 1 → 10% buffer\n"
-     "- risk_score 2 → 25% buffer\n"
-     "- risk_score 3 → 40% buffer + escalation\n"),
+    ("system", _PLANNER_SYSTEM),
     ("user",
-     "Business context:\n{business_context}\n\nOps insights:\n{ops_insights}\n\nWeather risk:\n{weather_risk}\n\n"
-     "Scenario analysis (empty string if no scenario was run):\n{scenario_analysis}\n\n"
+     "Business context (rules and constraints):\n{business_context}\n\n"
+     "Ops insights:\n{ops_insights}\n\n"
+     "Weather risk (global summary):\n{weather_risk}\n\n"
+     "Weather risk by corridor:\n{weather_risk_by_corridor}\n\n"
+     "Multi-corridor KPIs (48h planning window + resource allocation):\n{multi_corridor_kpis}\n\n"
+     "Resource constraints (available per day):\n{resource_constraints}\n\n"
+     "Scenario analysis (empty if none):\n{scenario_analysis}\n\n"
      "Return:\n"
-     "1) Dispatch plan for next 24-48h (include buffer recommendation using the mapping above)\n"
-     "2) If scenario is present: integrate scenario contingency recommendations into the plan\n"
-     "3) What to monitor (data + weather)\n"
-     "4) Contingency triggers (use risk_flags / risk_score only)\n"
-     "5) Expected KPI impacts\n")
+     "1) Per-corridor dispatch plan (Day0 + Day1): valid units, weather buffer applied, trucks allocated\n"
+     "2) Resource allocation decision: how trucks/drivers are split between C1 and C2 per day, with rationale\n"
+     "3) Penalty score estimate for the proposed allocation\n"
+     "4) SLA risk flags (any Tier 1 or cold-chain exposure)\n"
+     "5) What to monitor over the 48h window\n"
+     "6) Contingency triggers (weather / DQ / resource)\n"
+     "7) If scenario present: integrate contingency into plan\n")
+])
+
+PLANNER_REVISION_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", _PLANNER_SYSTEM),
+    ("user",
+     "Business context:\n{business_context}\n\n"
+     "Ops insights:\n{ops_insights}\n\n"
+     "Weather risk (global):\n{weather_risk}\n\n"
+     "Weather risk by corridor:\n{weather_risk_by_corridor}\n\n"
+     "Multi-corridor KPIs:\n{multi_corridor_kpis}\n\n"
+     "Resource constraints:\n{resource_constraints}\n\n"
+     "Scenario analysis:\n{scenario_analysis}\n\n"
+     "PRIOR PLAN (rejected by AuditAgent):\n{prior_plan}\n\n"
+     "AUDIT VIOLATIONS:\n{violations}\n\n"
+     "AUDIT FEEDBACK:\n{audit_feedback}\n\n"
+     "Revise the dispatch plan to fix all listed violations. Return the same 7-section structure as the original plan.\n")
 ])
 
 REPORT_PROMPT = ChatPromptTemplate.from_messages([
     ("system",
-     "You are ReportAgent. Produce a crisp HTML report for leadership. Use headings and bullets. Keep it skimmable.\n\n"
-     "WEATHER REPORTING RULES:\n"
-     "- Only report weather metrics that appear in the weather_risk object.\n"
-     "- If per_waypoint exists, include a small HTML table with each waypoint’s risk_score_0_3 and highlight the corridor max "
-     "(route_risk_score_0_3) and the worst_waypoint.\n"
-     "- Otherwise, report the single-location risk_score_0_3, risk_flags, and max_precip_mm_day / max_wind_gust_kmh / min_temp_c if present.\n"
-     "- Do NOT mention snowfall, visibility, or hourly triggers unless those fields are present.\n"),
+     "You are ReportAgent. Produce a crisp HTML report for leadership. Use headings, tables, and bullets. Keep it skimmable.\n\n"
+     "WEATHER RULES: Only report fields present in weather_risk / weather_risk_by_corridor. "
+     "Include a per-corridor risk table (Day0 / Day1 / 48h). Do NOT invent weather metrics not in the data.\n\n"
+     "REQUIRED SECTIONS:\n"
+     "1. Executive Summary\n"
+     "2. Corridor Comparison Table (C1 vs C2: volume, excluded, Tier mix, temp-controlled units, 48h weather risk)\n"
+     "3. Data Quality Summary (DQ-01..DQ-04 counts, legacy/alias resolutions)\n"
+     "4. Weather Risk by Corridor (Day0/Day1 per corridor, applied travel buffers)\n"
+     "5. Resource Allocation Plan (trucks/drivers by corridor/day, shortfalls, penalty exposure)\n"
+     "6. Dispatch Plan Summary\n"
+     "7. SLA Risk Flags\n"
+     "8. Monitoring & Contingency Triggers\n"),
     ("user",
-     "Inputs:\n\nBusiness context:\n{business_context}\n\n"
-     "CSV KPIs:\n{kpis}\n\n"
+     "Business context:\n{business_context}\n\n"
+     "Global KPIs:\n{kpis}\n\n"
+     "Multi-corridor KPIs:\n{multi_corridor_kpis}\n\n"
      "Anomaly highlights:\n{anomaly_highlights}\n\n"
-     "Weather risk:\n{weather_risk}\n\n"
+     "Weather risk (global):\n{weather_risk}\n\n"
+     "Weather risk by corridor:\n{weather_risk_by_corridor}\n\n"
+     "Resource constraints:\n{resource_constraints}\n\n"
      "Dispatch plan:\n{dispatch_plan}\n\n"
-     "Generate HTML report.")
+     "Generate complete HTML report.")
 ])
 
 SCENARIO_PROMPT = ChatPromptTemplate.from_messages([
     ("system",
-     "You are ScenarioAgent. You simulate the operational impact of a hypothetical demand or supply disruption "
-     "on a pharma dispatch operation. You receive current KPIs and a scenario definition. "
-     "Produce quantified before/after KPI estimates and concrete contingency recommendations. "
-     "Be precise. Do not fabricate data outside the scenario parameters."),
+     "You are ScenarioAgent. Simulate the operational impact of a hypothetical disruption on a multi-corridor "
+     "pharma dispatch operation. Produce quantified before/after KPI estimates and concrete contingency recommendations."),
     ("user",
      "Current KPIs:\n{kpis}\n\n"
      "Scenario:\n  Type: {scenario_type}\n  Magnitude: {scenario_magnitude}\n  Description: {scenario_description}\n\n"
      "Return:\n"
-     "1) Estimated KPI impact (projected change to total_shipments, items_by_hospital, missing_id_rate_pct)\n"
-     "2) Which hospitals / items are most exposed\n"
-     "3) Inventory buffer recommendation (units and percentage)\n"
+     "1) Estimated KPI impact per corridor (projected change to volume, excluded rate, Tier 1/2 mix)\n"
+     "2) Which corridor / hospitals / items are most exposed\n"
+     "3) Resource reallocation recommendation\n"
      "4) Contingency dispatch triggers\n"
-     "5) Monitoring checkpoints for the next 24-48h\n")
+     "5) Monitoring checkpoints for the 48h window\n")
 ])
 
 AUDIT_PROMPT = ChatPromptTemplate.from_messages([
     ("system",
-     "You are AuditAgent. Your sole job is to verify that a dispatch plan produced by PlannerAgent "
-     "complies with the business rules and constraints extracted from the PDF. "
-     "You output ONLY valid JSON with exactly three keys: "
+     "You are AuditAgent. Verify that the dispatch plan complies with the business rules and constraints. "
+     "Check: corridor SLA tiers, weather buffers, DQ rule adherence (DQ-01..DQ-04), "
+     "truck capacity model, resource constraint policy, and penalty model usage. "
+     "Output ONLY valid JSON with exactly three keys: "
      "\"compliant\" (bool), \"violations\" (list of strings), \"feedback\" (string). "
-     "If compliant is true, violations must be an empty list and feedback must be \"Plan is compliant.\" "
-     "Do not include any prose, markdown, or explanation outside the JSON object."),
+     "If compliant, violations must be [] and feedback must be \"Plan is compliant.\" "
+     "No prose, markdown, or explanation outside the JSON."),
     ("user",
      "Business rules and constraints:\n{business_context}\n\n"
      "Dispatch plan to audit:\n{dispatch_plan}\n\n"
      "Respond with JSON only:\n"
      "{{\"compliant\": <bool>, \"violations\": [<string>, ...], \"feedback\": \"<string>\"}}\n")
-])
-
-PLANNER_REVISION_PROMPT = ChatPromptTemplate.from_messages([
-    ("system",
-     "You are PlannerAgent. Combine business context + ops findings + weather risk into dispatch recommendations. "
-     "Prioritize SLA, safety, and cost.\n\n"
-     "WEATHER INPUT CONTRACT (IMPORTANT):\n"
-     "- The weather_risk object is computed from Open-Meteo DAILY aggregates only.\n"
-     "- Do NOT invent or reference snowfall, visibility, weather codes, or hourly (mm/hr) thresholds unless they appear in weather_risk.\n"
-     "- Use ONLY these fields if present: max_precip_mm_day, max_wind_gust_kmh, min_temp_c, risk_flags, risk_score_0_3.\n"
-     "- If corridor fields exist (route_risk_score_0_3, worst_waypoint, per_waypoint), interpret route_risk_score_0_3 as the corridor max "
-     "and worst_waypoint as the driver.\n\n"
-     "BUFFER POLICY (use this mapping):\n"
-     "- risk_score 0 → 0% buffer\n"
-     "- risk_score 1 → 10% buffer\n"
-     "- risk_score 2 → 25% buffer\n"
-     "- risk_score 3 → 40% buffer + escalation\n"),
-    ("user",
-     "Business context:\n{business_context}\n\nOps insights:\n{ops_insights}\n\nWeather risk:\n{weather_risk}\n\n"
-     "Scenario analysis (empty string if no scenario was run):\n{scenario_analysis}\n\n"
-     "PRIOR PLAN (rejected by AuditAgent):\n{prior_plan}\n\n"
-     "AUDIT VIOLATIONS:\n{violations}\n\n"
-     "AUDIT FEEDBACK:\n{audit_feedback}\n\n"
-     "Revise the dispatch plan to fix all listed violations. Return:\n"
-     "1) Dispatch plan for next 24-48h (include buffer recommendation using the mapping above)\n"
-     "2) If scenario is present: integrate scenario contingency recommendations into the plan\n"
-     "3) What to monitor (data + weather)\n"
-     "4) Contingency triggers (use risk_flags / risk_score only)\n"
-     "5) Expected KPI impacts\n")
 ])

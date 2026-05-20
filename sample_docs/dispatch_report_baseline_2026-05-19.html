@@ -1,0 +1,179 @@
+<html>
+<head>
+  <title>Dispatch Planning & Weather Risk Report</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1, h2, h3 { color: #2a4d69; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    th { background-color: #4b86b4; color: white; }
+    .flag-none { color: green; font-weight: bold; }
+    .flag-warning { color: orange; font-weight: bold; }
+    .flag-critical { color: red; font-weight: bold; }
+    ul { margin-top: 0; }
+  </style>
+</head>
+<body>
+
+<h1>Dispatch Planning & Weather Risk Report</h1>
+
+<h2>1. Executive Summary</h2>
+<ul>
+  <li>Two corridors analyzed: <strong>C1_I95_NJ_BOS</strong> (Tier 1, Life-critical) and <strong>C2_NJ_PHL</strong> (Tier 2, Standard specialty).</li>
+  <li>Weather risk moderate: Corridor C1 risk score 1 (low-medium), Corridor C2 risk score 2 (medium-high) on Day1 due to heavy rain and high winds in Philadelphia.</li>
+  <li>Travel time buffers applied accordingly: +10% for C1 corridors, +25% for C2 on Day1.</li>
+  <li>Resource availability sufficient to meet all corridor needs without shortfall; no penalties or SLA violations expected.</li>
+  <li>Data quality exclusions present (missing unique_item_id) impacting 3 shipments in planning window; focus needed to reduce exclusions.</li>
+  <li>Operational focus: monitor weather changes, maintain resource availability, and improve data quality to sustain SLA compliance.</li>
+</ul>
+
+<h2>2. Corridor Comparison Table</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Metric</th>
+      <th>C1_I95_NJ_BOS (Tier 1)</th>
+      <th>C2_NJ_PHL (Tier 2)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Total Valid Volume (Day0+Day1)</td>
+      <td>16 units (8 + 8)</td>
+      <td>14 units (7 + 7)</td>
+    </tr>
+    <tr>
+      <td>Excluded Units (Day0+Day1)</td>
+      <td>2 units (all Day0)</td>
+      <td>1 unit (Day0)</td>
+    </tr>
+    <tr>
+      <td>Tier Mix</td>
+      <td>100% Tier 1 (Life-critical)</td>
+      <td>100% Tier 2 (Standard specialty)</td>
+    </tr>
+    <tr>
+      <td>Temp-Controlled Units (Day0+Day1)</td>
+      <td>9 units (5 + 4)</td>
+      <td>7 units (3 + 4)</td>
+    </tr>
+    <tr>
+      <td>48h Weather Risk Score</td>
+      <td>1 (Low-Medium)</td>
+      <td>2 (Medium-High)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>3. Data Quality Summary</h2>
+<table>
+  <thead>
+    <tr>
+      <th>DQ Code</th>
+      <th>Description</th>
+      <th>Count</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>DQ-01</td><td>Missing unique_item_id (excluded from dispatch)</td><td>5</td></tr>
+    <tr><td>DQ-02</td><td>item_id not in master table</td><td>0</td></tr>
+    <tr><td>DQ-03</td><td>item_name mismatch for valid item_id</td><td>0</td></tr>
+    <tr><td>DQ-04</td><td>Duplicate unique_item_id</td><td>0</td></tr>
+  </tbody>
+</table>
+<p><strong>Notes:</strong> 3 shipments excluded in planning window due to missing unique_item_id. No legacy or alias resolution issues detected.</p>
+
+<h2>4. Weather Risk by Corridor</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Corridor</th>
+      <th>Day</th>
+      <th>Risk Score (0-3)</th>
+      <th>Applied Travel Time Buffer</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="2">C1_I95_NJ_BOS</td><td>Day0</td><td>1</td><td>+10%</td></tr>
+    <tr><td>Day1</td><td>1</td><td>+10%</td></tr>
+    <tr><td rowspan="2">C2_NJ_PHL</td><td>Day0</td><td>0</td><td>0%</td></tr>
+    <tr><td>Day1</td><td>2</td><td>+25%</td></tr>
+  </tbody>
+</table>
+
+<h3>Key Weather Highlights</h3>
+<ul>
+  <li><strong>C1_I95_NJ_BOS:</strong> Moderate wind risk at Providence RI waypoint (Day0 & Day1), no heavy rain or freezing risk.</li>
+  <li><strong>C2_NJ_PHL:</strong> Severe weather on Day1 at Philadelphia PA waypoint with heavy rain (51.8 mm) and high wind gusts (67.7 km/h), driving risk score 2.</li>
+</ul>
+
+<h2>5. Resource Allocation Plan</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Day</th>
+      <th>Corridor</th>
+      <th>Drivers Needed</th>
+      <th>Standard Trucks Needed</th>
+      <th>Temp-Controlled Trucks Needed</th>
+      <th>Available Drivers</th>
+      <th>Available Std Trucks</th>
+      <th>Available Temp-Controlled Trucks</th>
+      <th>Shortfall</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="2">Day0</td><td>C1_I95_NJ_BOS</td><td>2</td><td>1</td><td>1</td><td rowspan="2">6</td><td rowspan="2">4</td><td rowspan="2">2</td><td rowspan="2">None</td></tr>
+    <tr><td>C2_NJ_PHL</td><td>2</td><td>1</td><td>1</td></tr>
+    <tr><td rowspan="2">Day1</td><td>C1_I95_NJ_BOS</td><td>2</td><td>1</td><td>1</td><td rowspan="2">6</td><td rowspan="2">4</td><td rowspan="2">2</td><td rowspan="2">None</td></tr>
+    <tr><td>C2_NJ_PHL</td><td>2</td><td>1</td><td>1</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Summary:</strong> Resources are sufficient for all planned shipments on both days. No shortfalls or penalties expected.</p>
+
+<h2>6. Dispatch Plan Summary</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Corridor</th>
+      <th>Day</th>
+      <th>Valid Units</th>
+      <th>Excluded Units</th>
+      <th>Weather Risk</th>
+      <th>Travel Time Buffer</th>
+      <th>Standard Trucks</th>
+      <th>Temp-Controlled Trucks</th>
+      <th>Drivers</th>
+      <th>SLA Risk Flag</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="2">C1_I95_NJ_BOS</td><td>Day0</td><td>8</td><td>2</td><td>1</td><td>+10%</td><td>1</td><td>1</td><td>2</td><td class="flag-none">None</td></tr>
+    <tr><td>Day1</td><td>8</td><td>0</td><td>1</td><td>+10%</td><td>1</td><td>1</td><td>2</td><td class="flag-none">None</td></tr>
+    <tr><td rowspan="2">C2_NJ_PHL</td><td>Day0</td><td>7</td><td>1</td><td>0</td><td>0%</td><td>1</td><td>1</td><td>2</td><td class="flag-none">None</td></tr>
+    <tr><td>Day1</td><td>7</td><td>0</td><td>2</td><td>+25%</td><td>1</td><td>1</td><td>2</td><td class="flag-none">None</td></tr>
+  </tbody>
+</table>
+
+<h2>7. SLA Risk Flags</h2>
+<ul>
+  <li><span class="flag-none">No Tier 1 SLA violation risks detected.</span></li>
+  <li><span class="flag-none">No cold-chain violation risks detected.</span></li>
+  <li>Weather-related travel buffers applied to mitigate risk.</li>
+  <li>Exclusion rates noted but currently not impacting SLA compliance; data quality improvements recommended.</li>
+</ul>
+
+<h2>8. Monitoring & Contingency Triggers</h2>
+<ul>
+  <li><strong>Weather Monitoring:</strong> Watch for escalation to risk score 3; if triggered, increase travel buffer to +40% and escalate operational alerts.</li>
+  <li><strong>Data Quality:</strong> Monitor missing unique_item_id counts; rising exclusions trigger investigation and potential shipment holds.</li>
+  <li><strong>Resource Availability:</strong> Track daily resource usage; if shortages arise, prioritize Tier 1 cold-chain shipments and delay Tier 2 with penalty awareness.</li>
+  <li><strong>SLA Compliance:</strong> Continuous monitoring during dispatch execution, especially for Tier 1 corridor.</li>
+</ul>
+
+</body>
+</html>

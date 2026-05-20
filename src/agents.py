@@ -27,6 +27,8 @@ def run_context_agent(snippets: str) -> str:
 def run_ops_agent(
     summary: Dict[str, Any],
     kpis: Dict[str, Any],
+    multi_corridor_kpis: Dict[str, Any],
+    resource_constraints: Dict[str, Any],
     anomalies_md: str,
     cross_ref_findings: List[Dict[str, Any]] = None,
 ) -> str:
@@ -34,6 +36,8 @@ def run_ops_agent(
     return llm.invoke(OPS_ANALYSIS_PROMPT.format_messages(
         summary=summary,
         kpis=kpis,
+        multi_corridor_kpis=multi_corridor_kpis,
+        resource_constraints=resource_constraints,
         anomalies_md=anomalies_md,
         cross_ref_findings=cross_ref_findings,
     )).content
@@ -43,12 +47,18 @@ def run_planner_agent(
     business_context: str,
     ops_insights: str,
     weather_risk: Dict[str, Any],
+    weather_risk_by_corridor: Dict[str, Any],
+    multi_corridor_kpis: Dict[str, Any],
+    resource_constraints: Dict[str, Any],
     scenario_analysis: str = "",
 ) -> str:
     return llm.invoke(PLANNER_PROMPT.format_messages(
         business_context=business_context,
         ops_insights=ops_insights,
         weather_risk=weather_risk,
+        weather_risk_by_corridor=weather_risk_by_corridor,
+        multi_corridor_kpis=multi_corridor_kpis,
+        resource_constraints=resource_constraints,
         scenario_analysis=scenario_analysis,
     )).content
 
@@ -97,6 +107,9 @@ def run_planner_revision_agent(
     business_context: str,
     ops_insights: str,
     weather_risk: Dict[str, Any],
+    weather_risk_by_corridor: Dict[str, Any],
+    multi_corridor_kpis: Dict[str, Any],
+    resource_constraints: Dict[str, Any],
     scenario_analysis: str,
     prior_plan: str,
     audit_feedback: str,
@@ -107,6 +120,9 @@ def run_planner_revision_agent(
         business_context=business_context,
         ops_insights=ops_insights,
         weather_risk=weather_risk,
+        weather_risk_by_corridor=weather_risk_by_corridor,
+        multi_corridor_kpis=multi_corridor_kpis,
+        resource_constraints=resource_constraints,
         scenario_analysis=scenario_analysis,
         prior_plan=prior_plan,
         audit_feedback=audit_feedback,
@@ -117,14 +133,20 @@ def run_planner_revision_agent(
 def run_report_agent(
     business_context: str,
     kpis: Dict[str, Any],
+    multi_corridor_kpis: Dict[str, Any],
     anomaly_highlights: str,
     weather_risk: Dict[str, Any],
+    weather_risk_by_corridor: Dict[str, Any],
+    resource_constraints: Dict[str, Any],
     dispatch_plan: str,
 ) -> str:
     return llm.invoke(REPORT_PROMPT.format_messages(
         business_context=business_context,
         kpis=kpis,
+        multi_corridor_kpis=multi_corridor_kpis,
         anomaly_highlights=anomaly_highlights,
         weather_risk=weather_risk,
+        weather_risk_by_corridor=weather_risk_by_corridor,
+        resource_constraints=resource_constraints,
         dispatch_plan=dispatch_plan,
     )).content

@@ -191,7 +191,8 @@ def draw_architecture():
     # ── State flow annotation ─────────────────────────────────────────────
     ax.text(10, 1.9,
             "State flows through AppState TypedDict  ·  "
-            "pdf_retriever reused across nodes  ·  "
+            "Hardcoded corridor waypoints (no RAG)  ·  "
+            "Item master hardcoded (DQ-01..04)  ·  "
             "audit_iteration bounded at 3",
             ha="center", va="center", fontsize=8.5, color=GREY_MID,
             style="italic")
@@ -225,12 +226,14 @@ def draw_agent_flow():
     AGENTS = [
         # (y_centre, name, role_colour, border_colour, inputs[], outputs[])
         (11.8, "ContextAgent\n(pdf_context)",    BLUE_MID,    BLUE_DARK,
-         ["PDF path", "Query: KPIs/SLAs/rules"],
-         ["business_context (text)", "pdf_retriever (ChromaDB)"]),
+         ["Markdown playbook (direct read)", "OR: PDF path → ChromaDB RAG"],
+         ["business_context (text)"]),
 
         (9.5,  "OpsDataAgent\n(csv_analysis)",   GREEN_MID,   GREEN_DARK,
-         ["csv_path", "pdf_retriever (reused)", "Pharma KPI logic"],
-         ["csv_kpis (domain KPIs)", "anomalies_md", "cross_ref_findings",
+         ["csv_path (14-day multi-corridor)", "resources_path (trucks/drivers)",
+          "Item master tables (hardcoded)"],
+         ["csv_kpis", "multi_corridor_kpis",
+          "resource_constraints", "cross_ref_findings (DQ-01..04)",
           "ops_insights (text)"]),
 
         (7.0,  "ScenarioAgent\n(scenario)",       ORANGE_MID,  ORANGE_DARK,
@@ -238,13 +241,15 @@ def draw_agent_flow():
          ["scenario_analysis (text)", "(empty if no scenario)"]),
 
         (4.8,  "WeatherAgent\n(weather)",         BLUE_MID,    BLUE_DARK,
-         ["pdf_path (waypoints via RAG)", "Open-Meteo API",
-          "Fallback: WEATHER_LAT/LON"],
-         ["weather_risk dict\n(route + per-waypoint scores)"]),
+         ["CORRIDOR_WAYPOINTS (C1: 5 pts, C2: 4 pts)",
+          "Open-Meteo API — 2-day forecast per waypoint"],
+         ["weather_risk (global summary)",
+          "weather_risk_by_corridor\n(Day0/Day1/48h per corridor)"]),
 
         (2.7,  "PlannerAgent\n(planner)",         PURPLE_MID,  PURPLE_DARK,
          ["business_context", "ops_insights",
-          "weather_risk", "scenario_analysis"],
+          "weather_risk_by_corridor", "multi_corridor_kpis",
+          "resource_constraints", "scenario_analysis"],
          ["dispatch_plan (text)"]),
     ]
 
@@ -255,15 +260,17 @@ def draw_agent_flow():
           ' "feedback": str}', "audit_iteration++"]),
 
         (9.3,  "PlannerRevisionAgent\n(planner_revision)", PURPLE_MID, PURPLE_DARK,
-         ["business_context", "ops_insights", "weather_risk",
-          "scenario_analysis", "prior dispatch_plan",
+         ["business_context", "ops_insights",
+          "weather_risk_by_corridor", "multi_corridor_kpis",
+          "resource_constraints", "prior dispatch_plan",
           "audit violations + feedback"],
          ["revised dispatch_plan"]),
 
         (6.9,  "ReportAgent\n(report)",           GREEN_MID,   GREEN_DARK,
-         ["business_context", "csv_kpis",
-          "anomaly_highlights", "weather_risk", "dispatch_plan"],
-         ["report_html (full HTML)"]),
+         ["business_context", "csv_kpis", "multi_corridor_kpis",
+          "weather_risk_by_corridor", "resource_constraints",
+          "dispatch_plan"],
+         ["report_html (8-section HTML)"]),
 
         (4.5,  "EmailAgent\n(email)",             GREY_MID,    GREY_DARK,
          ["report_html", "SMTP env vars",

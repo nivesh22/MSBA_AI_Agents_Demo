@@ -11,8 +11,9 @@ if __name__ == "__main__":
     app = build_graph()
 
     state = {
-        "pdf_path": "data/SeeWeeS Specialty Dispatch Playbook.pdf",
-        "csv_path": "data/Incoming_shipment_03_06.csv",
+        "pdf_path":       "data/SeeWeeS Specialty Dispatch Playbook.md",
+        "csv_path":       "data/Incoming_shipments_14d_multi_corridor.csv",
+        "resources_path": "data/Resource_availability_48h.csv",
 
         # Enhancement 2: What-if Scenario Simulation
         # Uncomment and edit to activate scenario analysis:

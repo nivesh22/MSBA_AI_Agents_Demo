@@ -12,22 +12,25 @@ from graph import build_graph
 app = build_graph()
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-PDF_PATH = os.path.join(ROOT, "data", "SeeWeeS Specialty Dispatch Playbook.pdf")
-CSV_PATH = os.path.join(ROOT, "data", "Incoming_shipment_03_06.csv")
+PDF_PATH       = os.path.join(ROOT, "data", "SeeWeeS Specialty Dispatch Playbook.md")
+CSV_PATH       = os.path.join(ROOT, "data", "Incoming_shipments_14d_multi_corridor.csv")
+RESOURCES_PATH = os.path.join(ROOT, "data", "Resource_availability_48h.csv")
 
 # --- Run 1: baseline (no scenario) ---
 print("Running baseline pipeline...")
 state_baseline = {
-    "pdf_path": PDF_PATH,
-    "csv_path": CSV_PATH,
+    "pdf_path":       PDF_PATH,
+    "csv_path":       CSV_PATH,
+    "resources_path": RESOURCES_PATH,
 }
 final_baseline = app.invoke(state_baseline)
 
 # --- Run 2: with demand spike scenario ---
 print("Running what-if scenario pipeline...")
 state_scenario = {
-    "pdf_path": PDF_PATH,
-    "csv_path": CSV_PATH,
+    "pdf_path":       PDF_PATH,
+    "csv_path":       CSV_PATH,
+    "resources_path": RESOURCES_PATH,
     "scenario": {
         "type": "demand_spike",
         "magnitude": 0.20,
